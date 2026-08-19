@@ -2,7 +2,7 @@
 
 <p align="center">
   A multi-task CNN over UTKFace that predicts gender and age from one face crop —<br>
-  age treated as a distribution over 101 bins and trained with an Earth Mover's Distance loss.
+  age treated as a distribution over 101 one-year bins rather than a single number.
 </p>
 
 <p align="center">
@@ -16,6 +16,7 @@
   <br>
   <a href="https://susanqq.github.io/UTKFace/"><img alt="Dataset" src="https://img.shields.io/badge/Dataset-UTKFace-4C8CBF?style=for-the-badge"/></a>
   <br>
+  <a href="https://vishnujan-narayanan.vercel.app/"><img alt="Portfolio" src="https://img.shields.io/badge/Portfolio-vishnujan--narayanan.vercel.app-3b5998?logo=googlechrome&logoColor=white&style=for-the-badge"/></a>
   <a href="https://github.com/VishnujanNarayanan"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-VishnujanNarayanan-181717?logo=github&logoColor=white&style=for-the-badge"/></a>
   <a href="https://www.linkedin.com/in/vishnujan-narayanan"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Vishnujan_Narayanan-0A66C2?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0yMC40NDcgMjAuNDUyaC0zLjU1NHYtNS41NjljMC0xLjMyOC0uMDI3LTMuMDM3LTEuODUyLTMuMDM3LTEuODUzIDAtMi4xMzYgMS40NDUtMi4xMzYgMi45Mzl2NS42NjdIOS4zNTFWOWgzLjQxNHYxLjU2MWguMDQ2Yy40NzctLjkgMS42MzctMS44NSAzLjM3LTEuODUgMy42MDEgMCA0LjI2NyAyLjM3IDQuMjY3IDUuNDU1djYuMjg2ek01LjMzNyA3LjQzM2MtMS4xNDQgMC0yLjA2My0uOTI2LTIuMDYzLTIuMDY1IDAtMS4xMzguOTItMi4wNjMgMi4wNjMtMi4wNjMgMS4xNCAwIDIuMDY0LjkyNSAyLjA2NCAyLjA2MyAwIDEuMTM5LS45MjUgMi4wNjUtMi4wNjQgMi4wNjV6bTEuNzgyIDEzLjAxOUgzLjU1NVY5aDMuNTY0djExLjQ1MnpNMjIuMjI1IDBIMS43NzFDLjc5MiAwIDAgLjc3NCAwIDEuNzI5djIwLjU0MkMwIDIzLjIyNy43OTIgMjQgMS43NzEgMjRoMjAuNDUxQzIzLjIgMjQgMjQgMjMuMjI3IDI0IDIyLjI3MVYxLjcyOUMyNCAuNzc0IDIzLjIgMCAyMi4yMjIgMGguMDAzeiIvPjwvc3ZnPg%3D%3D&logoColor=white&style=for-the-badge"/></a>
   <a href="https://substack.com/@vishnujannarayanan"><img alt="Substack" src="https://img.shields.io/badge/Substack-@vishnujannarayanan-FF6719?logo=substack&logoColor=white&style=for-the-badge"/></a>
@@ -40,19 +41,22 @@ true about the label: a 30-year-old face is barely distinguishable from a 31-yea
 the annotation itself is uncertain. Squared error treats a 1-year miss and a 20-year miss as
 differing only in magnitude, not in kind.
 
-This project instead represents each age as a **Gaussian distribution over 101 bins** and trains
-with **Earth Mover's Distance**, a loss that knows bin 30 is close to bin 31 and far from bin 60.
-Gender is learned jointly from the same convolutional trunk, so both tasks share one face
+This project instead represents each age as a **Gaussian distribution over 101 bins**, so a label
+of 30 becomes soft mass across roughly 26–34 — which matches how uncertain the annotation actually
+is. Gender is learned jointly from the same convolutional trunk, so both tasks share one face
 representation.
 
 ## Features
 
 - **Multi-task CNN** — one trunk, two heads: 101-way age distribution and 2-way gender.
 - **Label Distribution Learning** — exact ages converted to Gaussians with σ = 2.0.
-- **EMD loss** over cumulative distributions, so error scales with distance between age bins.
+- **Cross-entropy over the age bins**, scored against the Gaussian target. An Earth Mover's
+  Distance loss is kept behind `LOSS=emd`; see [Limitations](#limitations) for why it is not the
+  default.
 - **MediaPipe face detection** with a 5% margin crop, replacing naive centre-cropping.
 - **Stratified splitting** by age decade × gender, so both are balanced across train and val.
 - **Keras Tuner search** over filters, kernel size, dense width, dropout, and learning rate.
+- **Gradio demo** (`scripts/demo.py`) — a face in, the detected crop and both predictions out.
 - **Interpretable age metric** — MAE in years, recovered as the expectation of the predicted
   distribution rather than an argmax.
 
@@ -69,13 +73,13 @@ flowchart TB
     C --> S["Stratified split<br/>age decade x gender, 80/20"]
     LDL --> S
 
-    S --> M["CNN trunk<br/>Conv2D -> BatchNorm -> MaxPool -> Flatten<br/>Dense -> Dropout"]
+    S --> M["CNN trunk<br/>3x (Conv2D -> BatchNorm) -> MaxPool<br/>GlobalAvgPool -> Dense -> Dropout"]
     M --> A["age head<br/>Dense(101, softmax)"]
     M --> G["gender head<br/>Dense(2, softmax)"]
 
-    A --> LA["emd_loss<br/>weight ALPHA=1.0"]
+    A --> LA["kl_loss (cross-entropy)<br/>weight ALPHA=1.0"]
     G --> LG["categorical_crossentropy<br/>weight BETA=1.0"]
-    A --> MAE["mae_from_distribution<br/>expectation over bins, in years"]
+    A --> MAE["age_mae<br/>expectation over bins, in years"]
 ```
 
 ## Design Decisions
@@ -84,12 +88,20 @@ flowchart TB
 over the 0–100 grid and normalises it. A label of 30 becomes soft mass across roughly 26–34,
 which matches how uncertain the annotation actually is.
 
-**EMD compares cumulative distributions.** `emd_loss` takes `cumsum` of both the true and
-predicted distributions and returns the mean absolute difference. Predicting 32 for a 30-year-old
-is penalised far less than predicting 60 — cross-entropy over bins would treat both as simply
-"wrong".
+**The age loss is cross-entropy against the Gaussian target.** Because the target is soft rather
+than one-hot, a prediction centred on 32 for a 30-year-old still collects most of the target's
+mass, so near misses are already cheaper than far ones.
 
-**Predicted age is the expectation, not the argmax.** `mae_from_distribution` dots the predicted
+An Earth Mover's Distance loss on the CDFs was the original choice and reads as the better idea —
+it scales error with distance between bins. In practice it failed badly. EMD compares *cumulative*
+distributions, so a wide flat prediction parked near the target's centre of mass is cheap: a
+little wrong everywhere instead of very wrong somewhere. Since predicted age is the expectation of
+that distribution, hedging wide reads as a mid-range guess. Every adult came back at 45.0, no
+prediction in the held-out set ever exceeded it, and 35% of them landed in 44–45. Cross-entropy
+offers no such refuge — probability has to sit where the age actually is. `LOSS=emd` reproduces
+the old behaviour.
+
+**Predicted age is the expectation, not the argmax.** `age_mae` dots the predicted
 distribution with the age grid. This uses the whole distribution, and gives a metric in years that
 means something to a reader.
 
@@ -102,36 +114,64 @@ face are dropped rather than fed in as noise.
 concentrated on one side. Buckets with fewer than three samples go entirely to train, so
 validation never contains a group the model has never seen.
 
-**Both tasks are weighted equally** (`ALPHA = BETA = 1.0`), which is a starting point rather than
-a tuned choice — see [Limitations](#limitations).
+**Both tasks are weighted equally** (`ALPHA = 1.0`). Cross-entropy is roughly ten times the
+magnitude of the EMD it replaced, which needed `ALPHA = 5.0` to compete with the gender head;
+keeping that weight here would swamp gender instead.
 
 ## Results
 
-Final epoch of a 15-epoch run at 64×64 input, batch size 64:
+Measured on 2,019 held-out faces (`scripts/train.py`, three conv blocks into global average
+pooling, 64×64 input, 348k parameters):
 
-| Metric | Train | Validation |
-|---|---|---|
-| Gender accuracy | 0.9938 | **0.8167** |
-| Age MAE (years) | 11.59 | **13.22** |
-| True-age MAE via `ValReporter` | — | **12.80 years** |
-| Age (EMD) loss | 0.1189 | 0.1348 |
-| Gender loss | 0.0301 | 0.5454 |
-| Total loss | 0.1492 | 0.6685 |
+| Metric | Validation |
+|---|---|
+| Age MAE | **8.27 years** |
+| Age correlation with truth | **0.879** |
+| Gender accuracy | **0.842** |
+| Prediction range | 1.6 – 90.7 (true range 1 – 100) |
 
-**These numbers show clear overfitting on the gender head.** Training accuracy reaches 99.4%
-while validation stalls at 81.7%, and validation gender loss *rises* from 0.50 to 0.55 over the
-final epochs while training loss falls to 0.03. The age head generalises better — an 11.6/13.2
-train-to-val gap is comparatively modest — but a 12.8-year MAE is weak in absolute terms.
+Per age band, so the weak spots are visible rather than averaged away:
 
-For reference, the tuner's first search trial started at ~28.5 years validation MAE and 74.1%
-gender accuracy, so training does move both substantially; the ceiling here is architectural, not
-a failure to converge.
+| True age | n | Mean prediction | MAE |
+|---|---|---|---|
+| 1–5 | 496 | 5.9 | 4.0 |
+| 6–12 | 218 | 20.1 | 12.2 |
+| 13–19 | 171 | 23.5 | 8.3 |
+| 20–29 | 305 | 30.5 | 7.5 |
+| 30–39 | 208 | 40.0 | 9.1 |
+| 40–49 | 136 | 50.4 | 10.1 |
+| 50–59 | 188 | 57.1 | 10.6 |
+| 60–69 | 133 | 62.3 | 11.1 |
+| 70+ | 164 | 74.2 | 9.8 |
+
+Every band lands between 4 and 12 years. The 6–12 band is the worst of them, over-predicting by
+about eight years on average.
+
+**What the loss change was worth.** Under the EMD loss the same architecture reached 10.62 years
+with a correlation of 0.786, and predictions never exceeded 45.0 — the 70+ band was 36.1 years of
+error and 60–69 was 19.8. Switching to cross-entropy took those to 9.8 and 11.1. Gender moved the
+other way by about a point, 0.853 to 0.842, which is noise at this sample size.
+
+**Two other things were tried and were worse.** Inverse-frequency age weighting raised the ceiling
+from 45 to 46 but cost more on the dense young bands than it won on the sparse old ones (MAE 12.61,
+gender 0.803). A MobileNetV2 ImageNet backbone at 128×128 gave the best gender score of any run
+(0.855) but the worst age (14.69) with predictions collapsing to 2–26. Both are kept behind
+switches — `BALANCE=1` and `scripts/train_transfer.py` — so the comparison can be rerun.
+
+Neither helped because the ceiling was never a capacity or a data problem: the training set is 13%
+aged 45–59 and 14.5% over 60. It was the loss.
 
 ## Project Structure
 
 ```
 Age_Gender_classifier/
-├── Image_Classifier!.ipynb           # Main pipeline: MediaPipe crop, LDL, EMD, tuner, training
+├── scripts/prep.py                   # MediaPipe crop pass, cached to cache_faces.npz
+├── scripts/train.py                  # Training + evaluation; produces the reported numbers
+├── scripts/train_transfer.py         # Same task on a MobileNetV2 backbone, for comparison
+├── scripts/render_grid.py            # Draws artifacts/prediction-grid.png from held-out faces
+├── scripts/demo.py                   # Gradio demo over the saved model
+├── artifacts/prediction-grid.png     # Nine held-out faces, predicted against actual
+├── Image_Classifier!.ipynb           # Original notebook: MediaPipe crop, LDL, EMD, tuner
 ├── Image_classifier_multitask.ipynb  # Multi-task variant
 ├── image_classifier2_multitask.ipynb # Multi-task variant
 ├── image3.ipynb                      # Earlier experiment
@@ -248,20 +288,19 @@ All settings live in one config cell:
 
 ## Limitations
 
-- **The gender head overfits badly.** 99.4% train against 81.7% validation accuracy, with
-  validation loss rising while training loss falls.
-- **12.8-year age MAE is weak.** Published UTKFace results using deeper backbones reach
-  substantially lower error; this architecture is one convolutional block.
-- **The trunk is very shallow** — a single `Conv2D → BatchNorm → MaxPool` before flattening. The
-  tuner searches its width, not its depth.
+- **8.27-year age MAE is still weak.** Published UTKFace results using deeper backbones reach
+  substantially lower error.
+- **Children aged 6–12 are over-predicted by about eight years**, the worst band in the set. Ages
+  1–5 are the most accurate at 4.0 years, so the failure is specific rather than a general
+  young-face problem.
+- **Gender sits at 0.842** against a 0.552 majority-class baseline — real, but not strong.
 - **64×64 input discards fine detail** — skin texture and wrinkles are exactly the age signal.
-- **No data augmentation.** No flips, rotations, brightness jitter, or scale jitter, which is
-  likely the single largest contributor to the overfitting.
-- **`Flatten` after one pooling layer** produces a very wide dense layer, concentrating almost all
-  parameters in one place.
-- **Loss weights are untuned.** `ALPHA = BETA = 1.0` was never varied, despite the two losses
-  operating on different scales — EMD sits around 0.12 while gender cross-entropy reaches 0.03.
-- **`DATA_DIR` is an absolute Windows path** and must be edited before the notebook runs.
+  The 128×128 cache built for `train_transfer.py` exists but the main model does not use it.
+- **A pretrained backbone did not help.** MobileNetV2 scored the best gender of any run and the
+  worst age. Whether that is the fine-tuning schedule or the resolution is untested.
+- **The notebook is no longer the reference implementation.** `Image_Classifier!.ipynb` still
+  runs its own keras-tuner search with the EMD loss and does not carry the change described
+  above; `scripts/train.py` is what produces the reported numbers.
 - **`extract.py` has hardcoded absolute paths** and does not accept arguments.
 - **`mediapipe` and `keras-tuner` are missing from `requirements.txt`**, and no versions are
   pinned.
@@ -307,6 +346,7 @@ gender, and ethnicity (Zhang, Song &amp; Qi).
 </p>
 
 <p align="center">
+  <a href="https://vishnujan-narayanan.vercel.app/"><img alt="Portfolio" src="https://img.shields.io/badge/Portfolio-vishnujan--narayanan.vercel.app-3b5998?logo=googlechrome&logoColor=white&style=for-the-badge"/></a>
   <a href="https://github.com/VishnujanNarayanan"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-VishnujanNarayanan-181717?logo=github&logoColor=white&style=for-the-badge"/></a>
   <a href="https://www.linkedin.com/in/vishnujan-narayanan"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Vishnujan_Narayanan-0A66C2?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0yMC40NDcgMjAuNDUyaC0zLjU1NHYtNS41NjljMC0xLjMyOC0uMDI3LTMuMDM3LTEuODUyLTMuMDM3LTEuODUzIDAtMi4xMzYgMS40NDUtMi4xMzYgMi45Mzl2NS42NjdIOS4zNTFWOWgzLjQxNHYxLjU2MWguMDQ2Yy40NzctLjkgMS42MzctMS44NSAzLjM3LTEuODUgMy42MDEgMCA0LjI2NyAyLjM3IDQuMjY3IDUuNDU1djYuMjg2ek01LjMzNyA3LjQzM2MtMS4xNDQgMC0yLjA2My0uOTI2LTIuMDYzLTIuMDY1IDAtMS4xMzguOTItMi4wNjMgMi4wNjMtMi4wNjMgMS4xNCAwIDIuMDY0LjkyNSAyLjA2NCAyLjA2MyAwIDEuMTM5LS45MjUgMi4wNjUtMi4wNjQgMi4wNjV6bTEuNzgyIDEzLjAxOUgzLjU1NVY5aDMuNTY0djExLjQ1MnpNMjIuMjI1IDBIMS43NzFDLjc5MiAwIDAgLjc3NCAwIDEuNzI5djIwLjU0MkMwIDIzLjIyNy43OTIgMjQgMS43NzEgMjRoMjAuNDUxQzIzLjIgMjQgMjQgMjMuMjI3IDI0IDIyLjI3MVYxLjcyOUMyNCAuNzc0IDIzLjIgMCAyMi4yMjIgMGguMDAzeiIvPjwvc3ZnPg%3D%3D&logoColor=white&style=for-the-badge"/></a>
   <a href="https://substack.com/@vishnujannarayanan"><img alt="Substack" src="https://img.shields.io/badge/Substack-@vishnujannarayanan-FF6719?logo=substack&logoColor=white&style=for-the-badge"/></a>
