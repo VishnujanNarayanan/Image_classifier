@@ -21,7 +21,7 @@ NUM_BINS = 101
 AGE_GRID = np.arange(NUM_BINS, dtype=np.float32)
 SIGMA    = 2.0
 EPOCHS   = int(os.environ.get("EPOCHS", 60))
-ALPHA    = 5.0   # age loss weight: EMD lands ~0.16 against a ~0.47 gender CE, so at
+ALPHA    = float(os.environ.get("ALPHA", 1.0 if os.environ.get("LOSS", "ce") == "ce" else 5.0))   # age loss weight: EMD lands ~0.16 against a ~0.47 gender CE, so at
                  # equal weights the shared trunk optimises gender and lets age drift
 BATCH    = 64
 SEED     = 42
@@ -89,6 +89,24 @@ def emd_loss(y_true, y_pred):
     return tf.reduce_mean(tf.abs(tf.cumsum(y_true, 1) - tf.cumsum(y_pred, 1)))
 
 
+def kl_loss(y_true, y_pred):
+    """Cross-entropy against the Gaussian target distribution.
+
+    EMD compares CDFs, so a wide flat prediction sitting near the target's centre
+    of mass is cheap: it is only ever a little wrong everywhere rather than very
+    wrong somewhere. Predicted age is the EXPECTATION of that distribution, so
+    hedging wide reads as a mid-range guess - which is why every adult came back
+    at 45.0 and no prediction in the held-out set ever exceeded it. Cross-entropy
+    scores each bin against the target and gives no such refuge: probability has
+    to sit where the age actually is.
+    """
+    y_pred = tf.clip_by_value(y_pred, 1e-7, 1.0)
+    return tf.reduce_mean(-tf.reduce_sum(y_true * tf.math.log(y_pred), axis=1))
+
+
+AGE_LOSS = {"emd": emd_loss, "ce": kl_loss}[os.environ.get("LOSS", "ce")]
+
+
 def age_mae(y_true, y_pred):
     g = tf.constant(AGE_GRID)
     return tf.reduce_mean(tf.abs(tf.tensordot(y_true, g, [[1], [0]])
@@ -119,7 +137,7 @@ def build(kind):
     gen = tf.keras.layers.Dense(2, activation="softmax", name="gender")(x)
     m = tf.keras.Model(inp, {"age": age, "gender": gen})
     m.compile(tf.keras.optimizers.Adam(1e-3),
-              loss={"age": emd_loss, "gender": "categorical_crossentropy"},
+              loss={"age": AGE_LOSS, "gender": "categorical_crossentropy"},
               loss_weights={"age": ALPHA, "gender": 1.0},
               metrics={"age": [age_mae], "gender": ["accuracy"]})
     return m
@@ -160,7 +178,7 @@ for kind in os.environ.get("ARCH", "shallow,deep").split(","):
 best = min(results, key=lambda k: results[k]["mae"])
 print("\nbest:", best, results[best], flush=True)
 m = tf.keras.models.load_model(os.path.join(OUT_DIR, f"{best}.keras"),
-                               custom_objects={"emd_loss": emd_loss, "age_mae": age_mae})
+                               custom_objects={"emd_loss": emd_loss, "kl_loss": kl_loss, "age_mae": age_mae})
 pr = m.predict(X[va], batch_size=256, verbose=0)
 pa, pg = pr["age"], pr["gender"]
 np.savez_compressed(os.path.join(OUT_DIR, "val_preds.npz"),
