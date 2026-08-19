@@ -1,0 +1,31 @@
+# Ignore everything
+*
+
+# Allow only specific files
+!Image_Classifier!.ipynb
+!requirements.txt
+!README.md
+!LICENSE
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Training pipeline added alongside the notebook
+!scripts/
+!scripts/*.py
+!.gitignore
+
+# ...but never the things it produces: a 5.7GB venv, the 113MB face cache and
+# the saved models. Regenerate with prep.py then train.py.
+venv_tf/
+env_age_gender/
+cache_faces*.npz
+tuner/
+UTKFace/
+# the rendered grid is the deliverable, so it is kept; the models beside it are not.
+# The deny-all `*` at the top means the directory itself has to be re-allowed first,
+# or git never descends into it to see the negation below.
+!artifacts/
+artifacts/*
+!artifacts/prediction-grid.png
