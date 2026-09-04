@@ -1,0 +1,10 @@
+# What the container needs to SERVE a prediction. Training-only packages
+# (keras-tuner, matplotlib, scikit-learn) are deliberately absent -- they would
+# add install time to an image whose only job is to answer /predict.
+-r requirements.txt
+mediapipe==0.10.9
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+gradio
