@@ -11,15 +11,18 @@ architectures are trained and compared on validation age MAE in years.
   shallow  the search space's own shape - one conv block, flatten, dense
   deep     three conv blocks into global average pooling
 """
-import os, json, numpy as np, tensorflow as tf
+import os, sys, json, numpy as np, pandas as pd, tensorflow as tf
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from agc import db
+from agc.labels import NUM_BINS, SIGMA, age_grid, ages_to_distributions, expected_age
+from agc.split import stratified_split
 
 HERE     = os.path.dirname(__file__)
 CACHE    = os.path.join(HERE, "..", "cache_faces.npz")
 OUT_DIR  = os.path.join(HERE, "..", "artifacts")
 IMG_SIZE = 64
-NUM_BINS = 101
-AGE_GRID = np.arange(NUM_BINS, dtype=np.float32)
-SIGMA    = 2.0
+AGE_GRID = age_grid()
 EPOCHS   = int(os.environ.get("EPOCHS", 60))
 ALPHA    = float(os.environ.get("ALPHA", 1.0 if os.environ.get("LOSS", "ce") == "ce" else 5.0))   # age loss weight: EMD lands ~0.16 against a ~0.47 gender CE, so at
                  # equal weights the shared trunk optimises gender and lets age drift
@@ -37,12 +40,14 @@ genders = d["genders"].astype("int32")
 paths   = d["paths"]
 print("data:", X.shape, flush=True)
 
-# exact age -> Gaussian over the bin grid
-diffs    = AGE_GRID[None, :] - ages[:, None]
-age_dist = np.exp(-(diffs ** 2) / (2 * SIGMA ** 2))
-age_dist /= age_dist.sum(1, keepdims=True)
-age_dist = age_dist.astype("float32")
+# exact age -> Gaussian over the bin grid (agc/labels.py explains why)
+age_dist = ages_to_distributions(ages, NUM_BINS, SIGMA)
 gen_oh   = np.eye(2, dtype="float32")[genders]
+
+# One frame carries the labels from here on. Keras is still fed the arrays, but
+# the split tagging, the join against predictions and the per-band report below
+# are DataFrame operations rather than four parallel arrays indexed by hand.
+labels = pd.DataFrame({"path": paths, "age": ages.astype(int), "gender": genders})
 
 # Age-balanced sample weights. UTKFace's median age is 24 and the tail past 45 is
 # thin, so the age head minimises its loss by keeping probability mass in the low
@@ -68,20 +73,16 @@ print("age weight min/median/max: %.2f / %.2f / %.2f"
       % (age_w.min(), np.median(age_w), age_w.max()), flush=True)
 
 # stratified 80/20 by (age decade, gender)
-rng = np.random.default_rng(SEED)
-tr, va = [], []
-key = list(zip(np.clip(ages // 10, 0, 10).astype(int), genders))
-groups = {}
-for i, k in enumerate(key):
-    groups.setdefault(k, []).append(i)
-for k, idx in groups.items():
-    idx = np.array(idx); rng.shuffle(idx)
-    if len(idx) > 2:
-        c = int(0.8 * len(idx)); tr += list(idx[:c]); va += list(idx[c:])
-    else:
-        tr += list(idx)
-tr, va = np.array(tr), np.array(va)
+tr, va = stratified_split(ages, genders, frac=0.8, seed=SEED)
+labels["split"] = "train"
+labels.loc[va, "split"] = "val"
 print(f"train {len(tr)}  val {len(va)}", flush=True)
+
+# The dataset inventory and every run's result go to SQLite. Comparing the loss
+# change against the balancing experiment against the transfer run used to mean
+# scrolling back through a terminal that had long since lost the output.
+con = db.connect(os.environ.get("DB", db.DEFAULT_DB))
+print("db:", db.write_faces(con, labels), "faces recorded", flush=True)
 
 
 def emd_loss(y_true, y_pred):
@@ -160,6 +161,8 @@ def ds(idx, training):
 results = {}
 for kind in os.environ.get("ARCH", "shallow,deep").split(","):
     print(f"\n=== {kind} ===", flush=True)
+    run_id = db.start_run(con, arch=kind, age_loss=os.environ.get("LOSS", "ce"),
+                          balanced=os.environ.get("BALANCE", "1") != "0", epochs=EPOCHS)
     m = build(kind)
     m.fit(ds(tr, True), validation_data=ds(va, False), epochs=EPOCHS, verbose=2,
           callbacks=[tf.keras.callbacks.EarlyStopping(
@@ -167,12 +170,21 @@ for kind in os.environ.get("ARCH", "shallow,deep").split(","):
                      tf.keras.callbacks.ReduceLROnPlateau(
                          "val_loss", factor=0.5, patience=5, min_lr=1e-5, verbose=1)])
     pr = m.predict(X[va], batch_size=256, verbose=0)
-    pa, pg = pr["age"], pr["gender"]
-    mae = float(np.mean(np.abs((pa * AGE_GRID).sum(1) - ages[va])))
-    acc = float(np.mean(pg.argmax(1) == genders[va]))
+    preds = pd.DataFrame({"path": paths[va],
+                          "pred_age": expected_age(pr["age"]),
+                          "pred_gender": pr["gender"].argmax(1)})
+    scored = preds.merge(labels, on="path")
+    mae = float((scored.pred_age - scored.age).abs().mean())
+    acc = float((scored.pred_gender == scored.gender).mean())
     params = int(m.count_params())
     print(f"{kind}: val age MAE {mae:.2f} years | gender acc {acc:.4f} | params {params:,}", flush=True)
-    results[kind] = dict(mae=mae, acc=acc, params=params)
+    db.finish_run(con, run_id, params=params, val_mae=mae, val_acc=acc, preds=preds)
+
+    # Read the cohort breakdown back out of SQL. The headline average hides where
+    # the model fails -- 8 years overall was 4 on children and 12 on the band next
+    # to it, and averaging the bands away is what let the old model saturate at 45.
+    print(db.band_errors(con, run_id).to_string(index=False), flush=True)
+    results[kind] = dict(mae=mae, acc=acc, params=params, run_id=run_id)
     m.save(os.path.join(OUT_DIR, f"{kind}.keras"))
 
 best = min(results, key=lambda k: results[k]["mae"])
@@ -182,9 +194,13 @@ m = tf.keras.models.load_model(os.path.join(OUT_DIR, f"{best}.keras"),
 pr = m.predict(X[va], batch_size=256, verbose=0)
 pa, pg = pr["age"], pr["gender"]
 np.savez_compressed(os.path.join(OUT_DIR, "val_preds.npz"),
-                    idx=va, pred_age=(pa * AGE_GRID).sum(1), pred_gender=pg.argmax(1),
+                    idx=va, pred_age=expected_age(pa), pred_gender=pg.argmax(1),
                     true_age=ages[va], true_gender=genders[va], paths=paths[va])
 json.dump({"results": results, "best": best,
            "n_train": int(len(tr)), "n_val": int(len(va))},
           open(os.path.join(OUT_DIR, "metrics.json"), "w"), indent=2)
+
+print("\nevery run so far:", flush=True)
+print(db.run_comparison(con).to_string(index=False), flush=True)
+con.close()
 print("wrote", OUT_DIR, flush=True)

@@ -31,3 +31,17 @@ def test_a_wider_sigma_spreads_more_mass():
 def test_sigma_must_be_positive():
     with pytest.raises(ValueError):
         ages_to_distributions([30], sigma=0)
+
+
+def test_ages_at_the_grid_edges_pull_inward():
+    """The Gaussian is truncated at 0 and 100, so the tails have nowhere to go.
+
+    Age 100 reads back as ~98.7 and no amount of training fixes that -- it is the
+    representation, not the model. Worth pinning: it is the one place where the
+    label round trip is lossy, and it explains a chunk of the 70+ band's error.
+    """
+    assert expected_age(ages_to_distributions([100]))[0] == pytest.approx(98.7, abs=0.1)
+    assert expected_age(ages_to_distributions([0]))[0] == pytest.approx(1.3, abs=0.1)
+    # everything away from the edges round-trips essentially exactly
+    inner = np.arange(7, 94)
+    assert np.allclose(expected_age(ages_to_distributions(inner)), inner, atol=0.01)

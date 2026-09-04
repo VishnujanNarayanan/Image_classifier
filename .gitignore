@@ -42,3 +42,8 @@ artifacts/*
 !.github/workflows/*.yml
 !pyproject.toml
 !requirements-dev.txt
+
+# The SQL lives in real .sql files so the aggregations can be run against the
+# database by hand, without going through Python.
+!sql/
+!sql/*.sql
