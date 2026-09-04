@@ -252,6 +252,19 @@ curl -F "file=@face.jpg" http://127.0.0.1:8000/predict
 found — both are answers, not failures. With `API_URL` unset the demo loads the
 model in-process instead, which is what a single-process deployment does.
 
+### On Hugging Face Spaces
+
+```bash
+huggingface-cli login
+python scripts/deploy_space.py --repo <your-username>/age-gender-classifier
+python scripts/deploy_space.py --repo <your-username>/... --dry-run   # list, upload nothing
+```
+
+The script stages `app.py`, the serving requirements, `agc/`, `demo.py` and the saved
+model into a temporary directory and uploads that — the notebooks, caches and training
+scripts stay behind. The Space runs single-process, so `API_URL` is unset and the demo
+loads the model directly.
+
 ### In a container
 
 ```bash
