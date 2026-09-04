@@ -96,7 +96,7 @@ def read_heads(prediction):
     return np.asarray(prediction[0])[0], np.asarray(prediction[1])[0]
 
 
-def predict(image_bgr, model, detector, size=IMG_SIZE):
+def predict(image_bgr, model, detector, size=IMG_SIZE, want_distribution=False):
     """-> (result dict, the crop the model saw). Raises NoFaceDetected.
 
     The crop is returned alongside the numbers so a caller can show what was
@@ -107,8 +107,11 @@ def predict(image_bgr, model, detector, size=IMG_SIZE):
         raise NoFaceDetected("no face detected in the image")
     batch = face[None].astype("float32") / 255.0
     dist, gender = read_heads(model.predict(batch, verbose=0))
-    return {
+    result = {
         "age": round(float(dist @ age_grid(NUM_BINS)), 1),
         "gender": GENDERS[int(np.argmax(gender))],
         "gender_confidence": round(float(np.max(gender)), 4),
-    }, face
+    }
+    if want_distribution:
+        result["age_distribution"] = [round(float(p), 6) for p in dist]
+    return result, face

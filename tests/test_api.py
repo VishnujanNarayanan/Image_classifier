@@ -109,3 +109,26 @@ def test_predict_raises_when_there_is_no_face():
     img = np.zeros((80, 80, 3), dtype=np.uint8)
     with pytest.raises(inference.NoFaceDetected):
         inference.predict(img, _StubModel(), _StubDetector(found=False))
+
+
+def test_the_age_distribution_is_returned_only_when_asked_for(client):
+    plain = client.post("/predict", files={"file": ("f.jpg", _jpeg(), "image/jpeg")})
+    assert "age_distribution" not in plain.json()
+
+    asked = client.post("/predict?dist=true", files={"file": ("f.jpg", _jpeg(), "image/jpeg")})
+    dist = asked.json()["age_distribution"]
+    assert len(dist) == 101
+    assert pytest.approx(sum(dist), abs=1e-3) == 1.0
+
+
+def test_the_reported_age_is_the_expectation_of_the_returned_distribution(client):
+    """The page draws the curve and marks the age on it, so they must agree."""
+    body = client.post("/predict?dist=true",
+                       files={"file": ("f.jpg", _jpeg(), "image/jpeg")}).json()
+    expectation = sum(i * p for i, p in enumerate(body["age_distribution"]))
+    assert body["age"] == pytest.approx(expectation, abs=0.1)
+
+
+def test_the_page_asks_for_both_the_crop_and_the_distribution(client):
+    """A silent drift here would leave the signature chart permanently blank."""
+    assert "predict?crop=true&dist=true" in client.get("/").text

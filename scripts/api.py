@@ -70,6 +70,10 @@ class Prediction(BaseModel):
     gender: str
     gender_confidence: float
     crop_png_base64: str | None = None
+    #: The full 101-bin age distribution. This model does not predict a number,
+    #: it predicts a shape, and the reported age is that shape's expectation --
+    #: so a caller that wants to show how confident the answer is needs the bins.
+    age_distribution: list[float] | None = None
 
 
 class Health(BaseModel):
@@ -88,14 +92,18 @@ def index():
 
 
 @app.post("/predict", response_model=Prediction, response_model_exclude_none=True)
-async def predict(file: UploadFile = File(...), crop: bool = False):
-    """Predict age and gender. `crop=true` also returns the face the model saw."""
+async def predict(file: UploadFile = File(...), crop: bool = False, dist: bool = False):
+    """Predict age and gender.
+
+    `crop=true` also returns the face the model saw; `dist=true` returns the full
+    101-bin age distribution behind the single number.
+    """
     raw = np.frombuffer(await file.read(), np.uint8)
     image = cv2.imdecode(raw, cv2.IMREAD_COLOR)
     if image is None:
         raise HTTPException(status_code=400, detail="could not decode that file as an image")
     try:
-        result, face = inference.predict(image, *get_model())
+        result, face = inference.predict(image, *get_model(), want_distribution=dist)
     except inference.NoFaceDetected as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if crop:
