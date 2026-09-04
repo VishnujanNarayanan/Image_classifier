@@ -30,9 +30,9 @@ _local = {"model": None, "detector": None}
 
 def _local_model():
     if _local["model"] is None:
-        _local["model"] = inference.load_model(os.environ.get("MODEL_PATH"))
-        _local["detector"] = faces.detector()
-        print("loaded model in-process", flush=True)
+        _local["model"], _local["detector"] = inference.shared_model_and_detector(
+            os.environ.get("MODEL_PATH"))
+        print("using the shared in-process model", flush=True)
     return _local["model"], _local["detector"]
 
 
@@ -68,7 +68,7 @@ def predict(rgb):
 
 def _detector_for_display():
     if _local["detector"] is None:
-        _local["detector"] = faces.detector()
+        _local_model()
     return _local["detector"]
 
 
