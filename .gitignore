@@ -53,3 +53,10 @@ artifacts/*
 !Dockerfile
 !docker-compose.yml
 !requirements-serve.txt
+
+# Hugging Face Space: the entry point, its serving requirements and the Space
+# card. Deployed with scripts/deploy_space.py, which stages these plus agc/,
+# demo.py and the saved model.
+!space/
+!space/*
+!scripts/*.sh

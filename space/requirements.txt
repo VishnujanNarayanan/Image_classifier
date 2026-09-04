@@ -1,0 +1,8 @@
+# The Space serves; it never trains. keras-tuner, matplotlib and scikit-learn are
+# deliberately absent.
+numpy
+opencv-python-headless
+tensorflow-cpu
+mediapipe==0.10.9
+gradio
+httpx
