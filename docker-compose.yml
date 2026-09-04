@@ -1,11 +1,10 @@
-# Splits what the Dockerfile runs together, so the API can be exercised on its own:
+# One service now, not two. The API serves the static page at / itself, so there
+# is no separate Gradio process to depend on.
 #
-#   docker compose up            # both, demo on :7861
-#   docker compose up api        # just the service, docs on :8000/docs
+#   docker compose up      # http://localhost:8000  (page), /docs (API)
 services:
   api:
     build: .
-    command: uvicorn scripts.api:app --host 0.0.0.0 --port 8000
     ports: ["8000:8000"]
     environment:
       MODEL_PATH: /app/artifacts/deep.onnx
@@ -14,15 +13,4 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 40s
-
-  demo:
-    build: .
-    command: python scripts/demo.py
-    ports: ["7861:7861"]
-    environment:
-      HOST: 0.0.0.0
-      API_URL: http://api:8000
-    depends_on:
-      api:
-        condition: service_healthy
+      start_period: 20s

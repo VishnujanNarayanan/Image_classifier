@@ -68,3 +68,6 @@ artifacts/*
 
 # Render Blueprint for the free-tier deploy.
 !render.yaml
+
+# The deployed UI is a static page served by FastAPI.
+!scripts/*.html

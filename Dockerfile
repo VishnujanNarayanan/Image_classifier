@@ -22,8 +22,8 @@ COPY agc/ ./agc/
 COPY scripts/ ./scripts/
 COPY artifacts/deep.onnx ./artifacts/deep.onnx
 
-ENV HOST=0.0.0.0 PORT=7861 API_URL=http://127.0.0.1:8000
-EXPOSE 7861 8000
+ENV PORT=8000
+EXPOSE 8000
 
-# The API holds the model; the demo is a client of it.
-CMD ["sh", "-c", "uvicorn scripts.api:app --host 0.0.0.0 --port 8000 & exec python scripts/demo.py"]
+# One process: the API, with the static page it serves at /.
+CMD ["sh", "-c", "exec uvicorn scripts.serve:app --host 0.0.0.0 --port ${PORT}"]

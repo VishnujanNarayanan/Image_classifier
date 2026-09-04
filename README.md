@@ -173,7 +173,9 @@ Age_Gender_classifier/
 │   └── db.py                         #   SQLite run log
 ├── sql/                              # the aggregations, as runnable .sql files
 ├── tests/                            # pytest suite, gated by GitHub Actions CI
-├── scripts/api.py                    # FastAPI service: POST /predict
+├── scripts/api.py                    # FastAPI service: POST /predict, page at /
+├── scripts/ui.html                   # the deployed UI (static, 3.8KB)
+├── scripts/serve.py                  # the deployed entry point
 ├── scripts/export_onnx.py            # Keras -> ONNX, with a parity check
 ├── artifacts/deep.onnx               # the deployable model (1.4MB, committed)
 ├── scripts/prep.py                   # MediaPipe crop pass, cached to cache_faces.npz
@@ -269,21 +271,35 @@ model in-process instead, which is what a single-process deployment does.
 ### On Render (free tier)
 
 `render.yaml` is a Blueprint — connect the repo at dashboard.render.com and it provisions
-the service with no dashboard fiddling. One process serves both: the FastAPI app with the
-Gradio UI mounted on it (`scripts/serve.py`), because a free instance gives one port.
+the service with no dashboard fiddling. One FastAPI process serves both `POST /predict`
+and the page at `/`, because a free instance gives one port.
 
-Verified locally against the exact environment Render builds:
+Verified against the exact environment Render builds:
 
 ```
-GET  /health   -> {"status":"ok","model_loaded":true}
-POST /predict  -> {"age":28.1,"gender":"Female","gender_confidence":0.7356}
-POST /predict  -> 400  (not an image)  |  422  (no face found)
-GET  /         -> 200  (Gradio UI)
-peak RSS       -> 348 MB of the 512 MB the free plan allows
+GET  /health   -> {"status":"ok","model_loaded":true}   before any request
+GET  /         -> 200, 3.8 KB static page
+POST /predict  -> {"age":48.5,"gender":"Male","gender_confidence":0.9928}
+POST /predict?crop=true  -> the above plus the face the model saw, as PNG
+POST /predict  -> 400 (not an image)  |  422 (no face found)
+startup        -> 1.29 s to ready     RSS 280 MB of the 512 MB allowed
+inference      -> 9 ms cold, 5 ms warm
 ```
 
-The free plan sleeps after 15 minutes idle, so the first request after a nap takes
-30–60 seconds.
+### Cold start
+
+The free plan spins down after 15 minutes idle and takes about a minute to wake, which
+a visitor would otherwise pay. Three things address it:
+
+- **`.github/workflows/keepalive.yml`** pings `/health` every 10 minutes so the service
+  never sleeps. 750 free instance-hours a month is 31.25 days, so one always-on service
+  fits. Set the `RENDER_URL` repository variable to enable it. (The ping must not target
+  `/robots.txt` — Render answers that itself while spun down, so it never wakes anything.)
+- **The model loads at startup**, not on first request, so the ping absorbs the ~1 s load
+  rather than a visitor. `EAGER_LOAD=0` restores lazy loading.
+- **No Gradio in the deployed image.** It cost 1.6 s of import and ~150 MB resident,
+  measured; dropping it took startup from 2.69 s to 1.29 s and peak memory from 348 MB to
+  280 MB. `scripts/demo.py` still uses Gradio for local work.
 
 ### On Hugging Face Spaces
 
