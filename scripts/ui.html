@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Age &amp; Gender Classifier</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{--bg:#0f1420;--card:#182034;--fg:#eef2ff;--mut:#8fa0c8;--acc:#4d8bff;--line:#26314d}
+  @media(prefers-color-scheme:light){
+    :root{--bg:#f4f6fb;--card:#fff;--fg:#131a2a;--mut:#5b6478;--line:#e2e7f0}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:2rem 1rem}
+  main{width:100%;max-width:640px}
+  h1{font-size:1.5rem;margin:0 0 .25rem}
+  p.sub{color:var(--mut);margin:0 0 1.5rem}
+  #drop{border:2px dashed var(--line);border-radius:14px;padding:2.5rem 1rem;text-align:center;cursor:pointer;background:var(--card);transition:border-color .15s}
+  #drop:hover,#drop.over{border-color:var(--acc)}
+  #drop input{display:none}
+  .row{display:flex;gap:1rem;margin-top:1.25rem;flex-wrap:wrap}
+  .card{flex:1;min-width:180px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem}
+  .k{color:var(--mut);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+  .v{font-size:1.75rem;font-weight:700;margin-top:.15rem}
+  img{max-width:100%;border-radius:10px;display:block}
+  .muted{color:var(--mut);font-size:.85rem}
+  .err{color:#ff6b6b}
+  footer{margin-top:2rem;color:var(--mut);font-size:.8rem}
+  a{color:var(--acc)}
+</style>
+<main>
+  <h1>Age &amp; Gender Classifier</h1>
+  <p class="sub">A multi-task CNN over UTKFace. Drop in a face photo.</p>
+
+  <label id="drop">
+    <input type="file" accept="image/*" id="file">
+    <div id="hint">Click, or drop an image here</div>
+  </label>
+
+  <div class="row" id="out" hidden>
+    <div class="card"><div class="k">Age</div><div class="v" id="age">–</div></div>
+    <div class="card"><div class="k">Gender</div><div class="v" id="gender">–</div>
+      <div class="muted" id="conf"></div></div>
+    <div class="card"><div class="k">What the model saw</div><img id="crop" alt="detected face"></div>
+  </div>
+  <p id="msg" class="muted"></p>
+
+  <footer>
+    Age MAE 8.27 years, gender accuracy 0.842 on held-out faces — honest numbers, not
+    strong ones. Ethnicity is in the UTKFace labels but accuracy across groups was never
+    measured. Don't use this for anything that matters.
+    <a href="https://github.com/VishnujanNarayanan/Image_classifier">Source</a>.
+  </footer>
+</main>
+<script>
+const drop=document.getElementById('drop'),file=document.getElementById('file'),
+      out=document.getElementById('out'),msg=document.getElementById('msg');
+;['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+;['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{if(ev.dataTransfer.files[0])send(ev.dataTransfer.files[0])});
+file.addEventListener('change',()=>{if(file.files[0])send(file.files[0])});
+
+async function send(f){
+  msg.textContent='Predicting…'; msg.className='muted';
+  const fd=new FormData(); fd.append('file',f);
+  try{
+    const r=await fetch('predict?crop=true',{method:'POST',body:fd});
+    const b=await r.json();
+    if(!r.ok){ out.hidden=true; msg.textContent=b.detail||('Error '+r.status); msg.className='err'; return; }
+    document.getElementById('age').textContent=Math.round(b.age);
+    document.getElementById('gender').textContent=b.gender;
+    document.getElementById('conf').textContent=Math.round(b.gender_confidence*100)+'% confident';
+    document.getElementById('crop').src='data:image/png;base64,'+b.crop_png_base64;
+    out.hidden=false; msg.textContent='';
+  }catch(e){ msg.textContent=String(e); msg.className='err'; }
+}
+</script>

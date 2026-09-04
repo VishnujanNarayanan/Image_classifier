@@ -53,6 +53,17 @@ def test_gradio_is_pinned_to_the_version_the_space_card_declares():
     assert version == declared, f"card says gradio {declared}, requirements say {version}"
 
 
+def test_the_deployed_image_does_not_install_gradio():
+    """Cold start is the constraint: gradio costs 1.6s of import and ~150MB RSS.
+
+    space/requirements.txt is exempt -- a Hugging Face Space IS a Gradio app.
+    This is about what Render and Docker run, which is the static page instead.
+    """
+    with open(SERVE, encoding="utf8") as fh:
+        assert not re.search(r"^gradio\b", fh.read(), re.M), \
+            "requirements-serve.txt installs gradio; the deployed UI is static"
+
+
 @SERVING
 def test_serving_pins_the_onnx_runtime_it_actually_uses(reqs):
     """agc/inference.py imports onnxruntime for any .onnx model, so it must ship."""

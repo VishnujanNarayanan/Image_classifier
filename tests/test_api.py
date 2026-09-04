@@ -38,6 +38,8 @@ class _StubDetector:
 
 @pytest.fixture
 def client(monkeypatch):
+    # the stub is injected before startup, so the eager loader finds a model
+    # already present and does not try to read one off disk
     monkeypatch.setitem(api._state, "model", _StubModel())
     monkeypatch.setitem(api._state, "detector", _StubDetector())
     return TestClient(api.app)
@@ -74,6 +76,26 @@ def test_a_photo_with_no_face_is_a_422_not_a_crash(client, monkeypatch):
     r = client.post("/predict", files={"file": ("empty.jpg", _jpeg(), "image/jpeg")})
     assert r.status_code == 422
     assert "no face" in r.json()["detail"]
+
+
+def test_the_page_is_served_at_the_root(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "Age &amp; Gender Classifier" in r.text
+    assert "predict?crop=true" in r.text          # the page calls the real endpoint
+
+
+def test_the_crop_is_returned_only_when_asked_for(client):
+    plain = client.post("/predict", files={"file": ("f.jpg", _jpeg(), "image/jpeg")})
+    assert "crop_png_base64" not in plain.json()
+
+    withcrop = client.post("/predict?crop=true",
+                           files={"file": ("f.jpg", _jpeg(), "image/jpeg")})
+    body = withcrop.json()
+    assert body["crop_png_base64"]
+    import base64
+    decoded = base64.b64decode(body["crop_png_base64"])
+    assert decoded[:8] == b"\x89PNG\r\n\x1a\n"   # a real PNG, not a placeholder
 
 
 def test_predict_also_hands_back_the_crop_the_model_saw():

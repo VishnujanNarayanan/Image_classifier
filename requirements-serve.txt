@@ -16,9 +16,8 @@ fastapi
 uvicorn[standard]
 python-multipart
 
-# Pinned, and NOT to 4.44.0: that release imports HfFolder from huggingface_hub,
-# which no longer exists in huggingface-hub 1.x, so the app died at import with
-# `ImportError: cannot import name 'HfFolder'`. Building this file into a clean
-# venv is the only thing that surfaces that before a deploy does.
-gradio==6.26.0
+# No gradio. It cost 1.6s of import time and ~150MB resident, measured, and on a
+# free plan that spins down after 15 minutes idle both are paid by whoever clicks
+# the link next. The deployed UI is a static page served by FastAPI instead.
+# scripts/demo.py still uses gradio for local work; nothing deployed does.
 httpx
