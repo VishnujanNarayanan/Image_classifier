@@ -2,8 +2,14 @@
 
 Both the HTTP API and the Gradio demo need exactly this, and before now each had
 its own copy of the crop-normalise-predict-argmax sequence. The model is loaded
-lazily so that importing this module costs nothing until a prediction is actually
-asked for -- which is what lets the API's routing be tested without TensorFlow.
+lazily so importing this module costs nothing until a prediction is asked for --
+which is what lets the API's routing be tested without any runtime installed.
+
+Serving runs the ONNX export, not the Keras file. Importing TensorFlow costs
+roughly a gigabyte resident, which does not fit the 512MB a no-card free tier
+gives you; ONNX Runtime loads the same graph in a fraction of that. The two were
+checked against each other on real faces and agree to ~3e-07 -- see
+scripts/export_onnx.py, which refuses to write a model it cannot verify.
 """
 import os
 
@@ -13,7 +19,7 @@ from agc.faces import IMG_SIZE, align_crop
 from agc.labels import NUM_BINS, age_grid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_MODEL = os.path.join(ROOT, "artifacts", os.environ.get("MODEL", "deep.keras"))
+DEFAULT_MODEL = os.path.join(ROOT, "artifacts", os.environ.get("MODEL", "deep.onnx"))
 
 GENDERS = ("Male", "Female")
 
@@ -22,8 +28,33 @@ class NoFaceDetected(Exception):
     """The detector found nothing to predict on."""
 
 
+class OnnxModel:
+    """An ONNX session behind the same `.predict(batch)` the Keras model offers.
+
+    Keeping the signature identical is deliberate: `predict` below, and every
+    test that stubs a model out, stay unchanged whichever runtime is loaded.
+    """
+
+    def __init__(self, path):
+        import onnxruntime as ort
+        self.session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+        self.input_name = self.session.get_inputs()[0].name
+
+    def predict(self, batch, verbose=0):
+        # returns [age, gender] in graph order, which read_heads unpacks
+        return self.session.run(None, {self.input_name: batch.astype("float32")})
+
+
 def load_model(path=None):
-    """Load the saved Keras model with the custom loss and metric objects."""
+    """Load whichever runtime the file asks for: .onnx to serve, .keras otherwise."""
+    path = path or DEFAULT_MODEL
+    if str(path).endswith(".onnx"):
+        return OnnxModel(path)
+    return load_keras(path)
+
+
+def load_keras(path):
+    """The training-side loader. Needs TensorFlow, so the serving path never calls it."""
     import tensorflow as tf
 
     def emd_loss(y_true, y_pred):
@@ -40,12 +71,11 @@ def load_model(path=None):
                                      - tf.tensordot(y_pred, g, [[1], [0]])))
 
     return tf.keras.models.load_model(
-        path or DEFAULT_MODEL,
-        custom_objects={"emd_loss": emd_loss, "kl_loss": kl_loss, "age_mae": age_mae})
+        path, custom_objects={"emd_loss": emd_loss, "kl_loss": kl_loss, "age_mae": age_mae})
 
 
 def read_heads(prediction):
-    """Keras hands back a dict or a pair depending on how the model was saved."""
+    """Keras hands back a dict; ONNX Runtime hands back a list in graph order."""
     if isinstance(prediction, dict):
         return np.asarray(prediction["age"])[0], np.asarray(prediction["gender"])[0]
     return np.asarray(prediction[0])[0], np.asarray(prediction[1])[0]

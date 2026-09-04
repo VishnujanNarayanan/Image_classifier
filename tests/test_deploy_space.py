@@ -35,7 +35,7 @@ def staged(tmp_path, monkeypatch):
 def test_the_space_gets_an_entry_point_and_a_model(staged):
     assert "app.py" in staged
     assert "requirements.txt" in staged
-    assert os.path.join("artifacts", "deep.keras") in staged
+    assert os.path.join("artifacts", "deep.onnx") in staged
 
 
 def test_no_bytecode_is_shipped(staged):

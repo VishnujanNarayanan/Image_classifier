@@ -13,7 +13,6 @@ and pandas. The last test here is what stops that drifting back.
 """
 import os
 import re
-import zipfile
 
 import pytest
 
@@ -21,7 +20,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARD = os.path.join(ROOT, "space", "README.md")
 REQS = os.path.join(ROOT, "space", "requirements.txt")
 SERVE = os.path.join(ROOT, "requirements-serve.txt")
-MODEL = os.path.join(ROOT, "artifacts", "deep.keras")
 
 #: Every requirements file that ends up in front of a user.
 SERVING = pytest.mark.parametrize("reqs", [REQS, SERVE],
@@ -45,10 +43,6 @@ def card_field(name):
     return m.group(1) if m else None
 
 
-def version_tuple(v):
-    return tuple(int(p) for p in re.findall(r"\d+", v))
-
-
 def test_gradio_is_pinned_to_the_version_the_space_card_declares():
     declared = card_field("sdk_version")
     assert declared, "space/README.md has no sdk_version"
@@ -60,19 +54,11 @@ def test_gradio_is_pinned_to_the_version_the_space_card_declares():
 
 
 @SERVING
-def test_keras_floor_is_at_least_what_the_saved_model_needs(reqs):
-    if not os.path.exists(MODEL):
-        pytest.skip("artifacts/deep.keras not present (run scripts/train.py)")
-    with zipfile.ZipFile(MODEL) as z:
-        saved = re.search(r'"keras_version"\s*:\s*"([^"]+)"',
-                          z.read("metadata.json").decode("utf8")).group(1)
-    pinned = pin("keras", reqs)
-    assert pinned, f"{os.path.basename(reqs)} does not pin keras"
-    op, floor = pinned
-    assert ">" in op, f"keras needs a lower bound, got '{op}{floor}'"
-    assert version_tuple(floor) >= version_tuple(saved), (
-        f"model was saved by Keras {saved} but {os.path.basename(reqs)} "
-        f"floors keras at {floor}")
+def test_serving_pins_the_onnx_runtime_it_actually_uses(reqs):
+    """agc/inference.py imports onnxruntime for any .onnx model, so it must ship."""
+    with open(reqs, encoding="utf8") as fh:
+        assert re.search(r"^onnxruntime\b", fh.read(), re.M), \
+            f"{os.path.basename(reqs)} does not install onnxruntime"
 
 
 @SERVING
@@ -82,6 +68,9 @@ def test_serving_images_do_not_install_training_only_packages(reqs):
     assert not re.search(r"^-r\s", body, re.M), (
         f"{os.path.basename(reqs)} uses `-r`, which drags the training "
         "requirements into a serving image -- list what it needs explicitly")
-    for package in ("keras-tuner", "scikit-learn", "matplotlib", "pandas"):
+    # tensorflow and keras are on this list for a hard reason, not tidiness:
+    # importing TensorFlow costs ~1GB resident and the free tier gives 512MB.
+    for package in ("tensorflow", "tensorflow-cpu", "keras", "keras-tuner",
+                    "scikit-learn", "matplotlib", "pandas"):
         assert not re.search(rf"^{re.escape(package)}\b", body, re.M), \
-            f"{package} is training-only and should not be in a serving image"
+            f"{package} is training-only and must not be in a serving image"

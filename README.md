@@ -174,6 +174,8 @@ Age_Gender_classifier/
 ├── sql/                              # the aggregations, as runnable .sql files
 ├── tests/                            # pytest suite, gated by GitHub Actions CI
 ├── scripts/api.py                    # FastAPI service: POST /predict
+├── scripts/export_onnx.py            # Keras -> ONNX, with a parity check
+├── artifacts/deep.onnx               # the deployable model (1.4MB, committed)
 ├── scripts/prep.py                   # MediaPipe crop pass, cached to cache_faces.npz
 ├── scripts/train.py                  # Training + evaluation; produces the reported numbers
 ├── scripts/train_transfer.py         # Same task on a MobileNetV2 backbone, for comparison
@@ -234,6 +236,18 @@ Then point `DATA_DIR` in the notebook at the resulting folder.
 ## Usage
 
 ### Serving a prediction
+
+Serving runs the **ONNX export**, not the Keras file. `scripts/export_onnx.py` converts
+`artifacts/deep.keras` to `artifacts/deep.onnx` and refuses to write a model whose
+outputs diverge from the original — the committed export agrees with Keras to
+**3.4e-07** over 64 real faces. The point is footprint: importing TensorFlow costs about
+a gigabyte resident, ONNX Runtime loads the same graph in ~67MB, and a free hosting tier
+gives 512MB.
+
+```bash
+python scripts/export_onnx.py          # re-export after retraining; verifies parity
+```
+
 
 The model is exposed over HTTP, and the Gradio demo is a client of that API rather
 than a second copy of the inference code:

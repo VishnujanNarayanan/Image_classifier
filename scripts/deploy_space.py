@@ -23,7 +23,7 @@ CONTENT = [
     ("agc", "agc"),
     ("scripts/demo.py", "scripts/demo.py"),
     ("scripts/__init__.py", "scripts/__init__.py"),
-    ("artifacts/deep.keras", "artifacts/deep.keras"),
+    ("artifacts/deep.onnx", "artifacts/deep.onnx"),
 ]
 
 
