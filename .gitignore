@@ -47,3 +47,9 @@ artifacts/*
 # database by hand, without going through Python.
 !sql/
 !sql/*.sql
+
+# Container + API. The saved model is still ignored; the image expects it to be
+# built by prep.py + train.py, or mounted in.
+!Dockerfile
+!docker-compose.yml
+!requirements-serve.txt

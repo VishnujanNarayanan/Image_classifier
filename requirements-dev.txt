@@ -6,3 +6,9 @@ pandas
 opencv-python-headless
 pytest
 ruff
+
+# The API tests stub the model out, so these are needed to exercise the routing
+# and the error paths -- but tensorflow and mediapipe still are not.
+fastapi
+httpx
+python-multipart

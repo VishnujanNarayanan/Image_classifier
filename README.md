@@ -165,6 +165,15 @@ aged 45–59 and 14.5% over 60. It was the loss.
 
 ```
 Age_Gender_classifier/
+├── agc/                              # the shared, testable core (no TensorFlow imports)
+│   ├── labels.py                     #   ages <-> 101-bin Gaussian distributions
+│   ├── split.py                      #   stratified split on (age decade, gender)
+│   ├── faces.py                      #   crop geometry; detector is injected
+│   ├── inference.py                  #   one photo -> one prediction
+│   └── db.py                         #   SQLite run log
+├── sql/                              # the aggregations, as runnable .sql files
+├── tests/                            # pytest suite, gated by GitHub Actions CI
+├── scripts/api.py                    # FastAPI service: POST /predict
 ├── scripts/prep.py                   # MediaPipe crop pass, cached to cache_faces.npz
 ├── scripts/train.py                  # Training + evaluation; produces the reported numbers
 ├── scripts/train_transfer.py         # Same task on a MobileNetV2 backbone, for comparison
@@ -223,6 +232,44 @@ python extract.py    # edit source_dir and target_dir first — both are absolut
 Then point `DATA_DIR` in the notebook at the resulting folder.
 
 ## Usage
+
+### Serving a prediction
+
+The model is exposed over HTTP, and the Gradio demo is a client of that API rather
+than a second copy of the inference code:
+
+```bash
+uvicorn scripts.api:app --port 8000          # POST /predict, docs at /docs
+API_URL=http://127.0.0.1:8000 python scripts/demo.py   # http://127.0.0.1:7861
+```
+
+```bash
+curl -F "file=@face.jpg" http://127.0.0.1:8000/predict
+# {"age":34.2,"gender":"Female","gender_confidence":0.9131}
+```
+
+`POST /predict` answers `400` for a file it cannot decode and `422` when no face is
+found — both are answers, not failures. With `API_URL` unset the demo loads the
+model in-process instead, which is what a single-process deployment does.
+
+### In a container
+
+```bash
+docker compose up            # API on :8000, demo on :7861
+docker compose up api        # just the service
+```
+
+### Comparing runs
+
+Every training run and its per-face predictions are logged to SQLite, so the
+experiments can be compared with a query rather than by scrolling a terminal:
+
+```bash
+sqlite3 artifacts/runs.db < sql/run_comparison.sql
+sqlite3 artifacts/runs.db < sql/age_band_error.sql   # per-cohort error
+```
+
+### The notebook
 
 ```bash
 jupyter notebook "Image_Classifier!.ipynb"
