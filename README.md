@@ -14,6 +14,8 @@
   <img alt="NumPy" src="https://img.shields.io/badge/NumPy-1.21+-013243?logo=numpy&logoColor=white"/>
   <a href="LICENSE.txt"><img alt="License" src="https://img.shields.io/badge/License-MIT-750014"/></a>
   <br>
+  <a href="https://age-gender-classifier.onrender.com"><img alt="Live demo" src="https://img.shields.io/badge/Live_demo-age--gender--classifier.onrender.com-2ea44f?style=for-the-badge&logo=render&logoColor=white"/></a>
+  <br>
   <a href="https://susanqq.github.io/UTKFace/"><img alt="Dataset" src="https://img.shields.io/badge/Dataset-UTKFace-4C8CBF?style=for-the-badge"/></a>
   <br>
   <a href="https://vishnujan-narayanan.vercel.app/"><img alt="Portfolio" src="https://img.shields.io/badge/Portfolio-vishnujan--narayanan.vercel.app-3b5998?logo=googlechrome&logoColor=white&style=for-the-badge"/></a>
@@ -270,11 +272,13 @@ model in-process instead, which is what a single-process deployment does.
 
 ### On Render (free tier)
 
+**Live at <https://age-gender-classifier.onrender.com>.**
+
 `render.yaml` is a Blueprint — connect the repo at dashboard.render.com and it provisions
 the service with no dashboard fiddling. One FastAPI process serves both `POST /predict`
 and the page at `/`, because a free instance gives one port.
 
-Verified against the exact environment Render builds:
+Verified in production, and byte-identical to the same calls run locally:
 
 ```
 GET  /health   -> {"status":"ok","model_loaded":true}   before any request
