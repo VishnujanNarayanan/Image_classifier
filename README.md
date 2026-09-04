@@ -266,7 +266,31 @@ curl -F "file=@face.jpg" http://127.0.0.1:8000/predict
 found — both are answers, not failures. With `API_URL` unset the demo loads the
 model in-process instead, which is what a single-process deployment does.
 
+### On Render (free tier)
+
+`render.yaml` is a Blueprint — connect the repo at dashboard.render.com and it provisions
+the service with no dashboard fiddling. One process serves both: the FastAPI app with the
+Gradio UI mounted on it (`scripts/serve.py`), because a free instance gives one port.
+
+Verified locally against the exact environment Render builds:
+
+```
+GET  /health   -> {"status":"ok","model_loaded":true}
+POST /predict  -> {"age":28.1,"gender":"Female","gender_confidence":0.7356}
+POST /predict  -> 400  (not an image)  |  422  (no face found)
+GET  /         -> 200  (Gradio UI)
+peak RSS       -> 348 MB of the 512 MB the free plan allows
+```
+
+The free plan sleeps after 15 minutes idle, so the first request after a nap takes
+30–60 seconds.
+
 ### On Hugging Face Spaces
+
+**Not currently possible on a free account** — HF returns `402 Payment Required` for
+Gradio Spaces, which now need PRO. The files and `scripts/deploy_space.py` are kept
+because they work if you ever subscribe.
+
 
 ```bash
 huggingface-cli login

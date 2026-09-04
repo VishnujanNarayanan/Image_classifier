@@ -45,6 +45,21 @@ class OnnxModel:
         return self.session.run(None, {self.input_name: batch.astype("float32")})
 
 
+#: One session per process, keyed by path. The API and the Gradio UI are mounted
+#: into the same process on a single free instance, and each used to load its own
+#: copy -- two ~67MB sessions of an identical graph, for nothing.
+_SHARED = {}
+
+
+def shared_model_and_detector(path=None):
+    """The process-wide (model, detector) pair, built on first use."""
+    from agc import faces
+    key = path or DEFAULT_MODEL
+    if key not in _SHARED:
+        _SHARED[key] = (load_model(key), faces.detector())
+    return _SHARED[key]
+
+
 def load_model(path=None):
     """Load whichever runtime the file asks for: .onnx to serve, .keras otherwise."""
     path = path or DEFAULT_MODEL

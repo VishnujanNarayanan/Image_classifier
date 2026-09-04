@@ -65,3 +65,6 @@ artifacts/*
 # .keras/.npz files beside it, it is committed: the free tier builds from git,
 # and CI needs it to test real inference instead of stubs.
 !artifacts/deep.onnx
+
+# Render Blueprint for the free-tier deploy.
+!render.yaml

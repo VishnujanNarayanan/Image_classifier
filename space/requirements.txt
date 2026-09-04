@@ -10,7 +10,7 @@ httpx
 
 mediapipe==0.10.9
 
-# Must match `sdk_version` in space/README.md -- Hugging Face picks the base
-# image from the card, then installs this on top, so an unpinned gradio is free
-# to drop 5.x into a 4.44 image.
-gradio==4.44.0
+# Must match `sdk_version` in space/README.md. Not 4.44.0: that release imports
+# HfFolder from huggingface_hub, removed in huggingface-hub 1.x, so it fails at
+# import against current transitive dependencies.
+gradio==6.26.0

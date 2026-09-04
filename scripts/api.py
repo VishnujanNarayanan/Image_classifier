@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from agc import faces, inference  # noqa: E402
+from agc import inference  # noqa: E402
 
 app = FastAPI(title="Age & Gender Classifier",
               description="Predicts age and gender from a single face photo.",
@@ -29,8 +29,8 @@ _state = {"model": None, "detector": None}
 
 def get_model():
     if _state["model"] is None:
-        _state["model"] = inference.load_model(os.environ.get("MODEL_PATH"))
-        _state["detector"] = faces.detector()
+        _state["model"], _state["detector"] = inference.shared_model_and_detector(
+            os.environ.get("MODEL_PATH"))
     return _state["model"], _state["detector"]
 
 

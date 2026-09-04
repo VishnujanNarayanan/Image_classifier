@@ -1,0 +1,20 @@
+# Render Blueprint. Connect the repo at dashboard.render.com and this provisions
+# the service without any dashboard fiddling.
+#
+# Free plan: 512MB RAM, sleeps after 15 minutes idle with a 30-60s cold start.
+# The whole reason serving runs ONNX instead of TensorFlow is that 512MB figure
+# -- see scripts/export_onnx.py and requirements-serve.txt.
+services:
+  - type: web
+    name: age-gender-classifier
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-serve.txt
+    # One port, one process: the API with the Gradio UI mounted on it.
+    startCommand: uvicorn scripts.serve:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: MODEL_PATH
+        value: /opt/render/project/src/artifacts/deep.onnx
