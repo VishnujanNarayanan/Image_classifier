@@ -29,3 +29,16 @@ UTKFace/
 !artifacts/
 artifacts/*
 !artifacts/prediction-grid.png
+
+# The shared package, its tests and the CI that gates them. The deny-all `*` at
+# the top means each directory has to be re-allowed before git will descend into
+# it, so the directory and its contents are both listed.
+!agc/
+!agc/*.py
+!tests/
+!tests/*.py
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+!pyproject.toml
+!requirements-dev.txt
