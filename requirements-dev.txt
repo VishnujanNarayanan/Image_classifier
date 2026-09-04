@@ -1,0 +1,8 @@
+# What CI needs to run the test suite. Deliberately excludes tensorflow and
+# mediapipe: nothing under agc/ imports them, which is the whole reason the
+# suite runs in under a minute on a free runner.
+numpy
+pandas
+opencv-python-headless
+pytest
+ruff

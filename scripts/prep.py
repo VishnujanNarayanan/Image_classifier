@@ -5,7 +5,7 @@ expanded by 5% on every side, resized to 64x64. Caches the model input, the
 labels and the source path so the grid renderer can show the original photo
 rather than the 64px crop the model actually sees.
 """
-import os, sys, numpy as np, cv2, mediapipe as mp
+import os, numpy as np, cv2, mediapipe as mp
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "UTKFace", "images_flat", "part1")
 OUT      = os.path.join(os.path.dirname(__file__), "..",

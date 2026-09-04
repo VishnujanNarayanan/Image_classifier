@@ -113,8 +113,8 @@ m.fit(train_ds, validation_data=val_ds, epochs=E_HEAD, verbose=2)
 
 print("\n=== stage 2: fine-tune top of backbone ===", flush=True)
 base.trainable = True
-for l in base.layers[:-40]:
-    l.trainable = False
+for layer in base.layers[:-40]:
+    layer.trainable = False
 compile_at(1e-4)
 m.fit(train_ds, validation_data=val_ds, epochs=E_FINE, verbose=2,
       callbacks=[tf.keras.callbacks.EarlyStopping(

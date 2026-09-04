@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# The scripts are programs run top-to-bottom, not modules anyone imports. Their
+# compact import header, aligned constant block and `guard; continue` lines are
+# house style and predate this config -- reformatting them would bury a real
+# change in an unrelated diff. They are still checked for actual defects (F).
+"scripts/*.py" = ["E401", "E402", "E501", "E702", "E731", "I001"]

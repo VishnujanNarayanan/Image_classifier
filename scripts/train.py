@@ -11,7 +11,7 @@ architectures are trained and compared on validation age MAE in years.
   shallow  the search space's own shape - one conv block, flatten, dense
   deep     three conv blocks into global average pooling
 """
-import os, sys, json, numpy as np, tensorflow as tf
+import os, json, numpy as np, tensorflow as tf
 
 HERE     = os.path.dirname(__file__)
 CACHE    = os.path.join(HERE, "..", "cache_faces.npz")
