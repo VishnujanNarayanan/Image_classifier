@@ -1,10 +1,27 @@
-# What the container needs to SERVE a prediction. Training-only packages
-# (keras-tuner, matplotlib, scikit-learn) are deliberately absent -- they would
-# add install time to an image whose only job is to answer /predict.
--r requirements.txt
+# What the container needs to SERVE a prediction.
+#
+# This deliberately does NOT do `-r requirements.txt`. That pulled in matplotlib,
+# scikit-learn and pandas -- none of which the serving path imports -- while this
+# file's own comment claimed they were absent. Serving imports exactly: cv2 and
+# mediapipe (agc/faces.py), numpy (agc/labels.py), tensorflow/keras
+# (agc/inference.py), fastapi and pydantic (scripts/api.py), gradio and httpx
+# (scripts/demo.py). Nothing else.
+numpy
+opencv-python-headless
+
+# Same floor and the same reason as space/requirements.txt: artifacts/deep.keras
+# was written by Keras 3.12.4, and an older Keras fails to deserialize it at the
+# first request rather than at build time.
+tensorflow-cpu
+keras>=3.12.4
+
 mediapipe==0.10.9
+
 fastapi
 uvicorn[standard]
-httpx
 python-multipart
-gradio
+
+# Pinned to match space/requirements.txt so the demo behaves identically in the
+# container and on the Space.
+gradio==4.44.0
+httpx
