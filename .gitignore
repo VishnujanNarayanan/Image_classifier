@@ -60,3 +60,8 @@ artifacts/*
 !space/
 !space/*
 !scripts/*.sh
+
+# The ONNX export is the DEPLOYABLE artifact and only 1.4MB, so unlike the
+# .keras/.npz files beside it, it is committed: the free tier builds from git,
+# and CI needs it to test real inference instead of stubs.
+!artifacts/deep.onnx

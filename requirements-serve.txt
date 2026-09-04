@@ -1,19 +1,14 @@
 # What the container needs to SERVE a prediction.
 #
-# This deliberately does NOT do `-r requirements.txt`. That pulled in matplotlib,
-# scikit-learn and pandas -- none of which the serving path imports -- while this
-# file's own comment claimed they were absent. Serving imports exactly: cv2 and
-# mediapipe (agc/faces.py), numpy (agc/labels.py), tensorflow/keras
-# (agc/inference.py), fastapi and pydantic (scripts/api.py), gradio and httpx
-# (scripts/demo.py). Nothing else.
+# No `-r requirements.txt`: that pulled matplotlib, scikit-learn and pandas into
+# a serving image while this file's comment claimed they were absent.
+#
+# No tensorflow and no keras either. Serving runs the ONNX export, which loads
+# the same graph in ~67MB against TensorFlow's ~1GB -- the difference between
+# fitting a 512MB free tier and not. Training still uses Keras; serving does not.
 numpy
 opencv-python-headless
-
-# Same floor and the same reason as space/requirements.txt: artifacts/deep.keras
-# was written by Keras 3.12.4, and an older Keras fails to deserialize it at the
-# first request rather than at build time.
-tensorflow-cpu
-keras>=3.12.4
+onnxruntime
 
 mediapipe==0.10.9
 
@@ -21,7 +16,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 
-# Pinned to match space/requirements.txt so the demo behaves identically in the
-# container and on the Space.
+# Pinned to match space/requirements.txt so the demo behaves identically
+# wherever it runs.
 gradio==4.44.0
 httpx

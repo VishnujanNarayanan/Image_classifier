@@ -1,21 +1,16 @@
-# What the Space needs to SERVE a prediction. Training-only packages
+# What a hosted demo needs to SERVE a prediction. Training-only packages
 # (keras-tuner, matplotlib, scikit-learn, pandas) are deliberately absent.
+#
+# Serving runs the ONNX export rather than Keras: ~67MB resident instead of
+# ~1GB, which is what makes a free tier viable at all.
 numpy
 opencv-python-headless
+onnxruntime
 httpx
 
-# artifacts/deep.keras was written by Keras 3.12.4 -- read from its metadata.json,
-# not guessed. Loading a 3.12 model on an older Keras fails at deserialization,
-# which surfaces as a Space that builds fine and then dies on the first request.
-# The floor is on keras itself because that is the version actually recorded in
-# the file; tensorflow-cpu is left to resolve against it. If pip reports a
-# conflict between the two, bump tensorflow-cpu rather than lowering this.
-tensorflow-cpu
-keras>=3.12.4
-
-# Must match `sdk_version` in space/README.md. Hugging Face picks the base image
-# from the card, then installs this on top -- so an unpinned gradio is free to
-# drop 5.x into a 4.44 image. tests/test_space_requirements.py enforces the match.
-gradio==4.44.0
-
 mediapipe==0.10.9
+
+# Must match `sdk_version` in space/README.md -- Hugging Face picks the base
+# image from the card, then installs this on top, so an unpinned gradio is free
+# to drop 5.x into a 4.44 image.
+gradio==4.44.0

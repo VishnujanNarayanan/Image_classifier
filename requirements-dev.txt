@@ -12,3 +12,7 @@ ruff
 fastapi
 httpx
 python-multipart
+
+# artifacts/deep.onnx is committed (1.4MB), so CI can exercise the real graph
+# rather than only stubs. Still no tensorflow.
+onnxruntime
